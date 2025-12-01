@@ -49,21 +49,36 @@ def get_steps(lines):
     return steps
 
 def get_num_zeros(steps, start_num):
-    """Calculate the number of times reaching zero."""
+    """Calculate the number of times reaching zero.
+    
+    Args:
+        steps (list): A list of steps each of which is a tuple like ('L', 580)
+        start_num: The start number on the dial
+
+    Returns:
+        The number of time the arrow on the lock pointing to zero.
+    """
 
     zero_count = 0
     curr_num = start_num
     for direction, step in steps:
-        if direction == 'L':
-            if  curr_num <= step % 100:
-                zero_count += 1
-                print(f'{direction}, {step}')
-        else: # 'R'
-            if curr_num + step % 100 >= 100:
-                zero_count += 1
-                print(f'{direction}, {step}')
-
+        print(f'before -- number is {curr_num}, turn is {direction}, {step}')
+        if step >= 100:
+            zero_count += step // 100
+            step = step % 100
     
+        if direction == 'L':
+            if curr_num != 0 and curr_num <= step:
+                zero_count += 1
+            curr_num = (curr_num - step) % 100     
+        else:
+            if curr_num + step >= 100:
+                zero_count += 1
+            curr_num = (curr_num + step) % 100
+        
+        print(f'after -- number is {curr_num}, zero_count={zero_count}')
+        print('==================')
+
     return zero_count
 
 lines = get_lines('day1.txt')
