@@ -41,7 +41,7 @@ def get_largest_num(battery_bank):
         if num not in first_appearing_index:
             first_appearing_index[num] = i
 
-    # Push all digits into a max heap
+    # Push all digits except the last one onto a max heap
     max_heap = []
     for i in range(0, len(digits) - 1):
         heapq.heappush(max_heap, -digits[i])
