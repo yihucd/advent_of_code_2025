@@ -1,5 +1,4 @@
 import os
-import heapq
 
 demo_mode = int(os.getenv('demo'))
 
