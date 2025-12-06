@@ -89,10 +89,8 @@ def group_vertical_numbers(strs_by_column, num_rows):
             group_count += 1
             continue
         else:
-            stripped_str = str_by_column.strip()
-            if stripped_str != '':
-                number_by_column = int(str_by_column)
-                column_number_dict[group_count].append(number_by_column)
+            number_by_column = int(str_by_column)
+            column_number_dict[group_count].append(number_by_column)
 
     return column_number_dict
 
