@@ -184,3 +184,4 @@ tuple_matrix = tuple(tuple(row) for row in matrix)
 num_of_timelines = get_num_of_timelines(tuple_matrix, start)
 
 print(f'number of timelines = {num_of_timelines}')
+    
