@@ -1,9 +1,7 @@
-import collections
 import heapq
-import math
 import os
 import random
-from shapely.geometry import Polygon, Point, box
+from shapely.geometry import Polygon, box
 from shapely.prepared import prep
 
 
@@ -80,59 +78,6 @@ def is_in_area(area, node):
     n_w, n_h = node
     return  (min(w1, w2) <= n_w <= max(w1, w2) and min(h1, h2) <= n_h <= max(h1, h2))
 
-def is_green_red(node, global_registry, invalid_registry, boundary_nodes, max_width, max_height):
-    """Check if the node is green or red.
-    
-    Args:
-        node (list): A node, e.g., (width, height).
-        global_registry (set): If the node is red/green, put in the global registry, i.e., set.
-        invalid_registry (set): Registry for node not red/green.
-        boundary_nodes (set): All boundary nodes each of which is between two red tiles.
-        max_width (int): Max possible width of a node.
-        max_height (int): Max possible height of a node.
-    Returns:
-        None.
-    """
-    if node in global_registry:
-        return True
-    
-    if node in invalid_registry:
-        return False
-    
-    directions = [[-1, 0], [0, 1], [1, 0], [0, -1]] # N, E, S, W
-
-    queue = collections.deque([node])
-    seen = {node}
-    red_green = True
-
-    while queue:
-        curr_node = queue.popleft()
-        for d in directions:
-            n_w, n_h = curr_node[0] + d[0], curr_node[1] + d[1]
-            neighbor = n_w, n_h
-            # Case 1: going outside of matrix
-            # So the starting node must not be red or green
-            if not is_valid(n_w, n_h, max_width, max_height):
-                red_green = False
-                break
-            # Case 2: Hit a red or green boundary nodes:
-            elif neighbor in boundary_nodes:
-                continue
-            # Case 3: contine explore until hitting all nodes within the boundary
-            else:
-                if neighbor not in seen:
-                    queue.append(neighbor)
-                    seen.add(neighbor)
-    
-    # If the node is a red or green node, then it means all nodes seen is also red or green
-    if red_green:
-        global_registry.update(seen)
-        return True
-    else:
-        seen.remove(node) # remove staring node and not adding it to invalid registry
-        invalid_registry.update(seen)
-        return False
-
 
 def find_nodes_on_same_line(node1, node2):
     """Find all tiles between two nodes that are on a straight line."""
@@ -154,25 +99,6 @@ def find_nodes_on_same_line(node1, node2):
     if w1 == w2 and h1 == h2: # Same node
         result = [(w1, h1)]
         return result
-
-def find_boundary_tiles(nodes):
-    """Find all boundary tiles. These are tiles on the boundary of a closed area.
-
-    Args:
-        nodes (list): A list of input red nodes.
-
-    Returns:
-        A set of boundary tiles each of which is like (width, height).
-    """
-    boundary_nodes = []
-    for i in range(len(nodes)):
-        for j in range(i + 1, len(nodes)):
-            node1 = nodes[i]
-            node2 = nodes[j]
-            nodes_on_same_line = find_nodes_on_same_line(node1, node2)
-            boundary_nodes.extend(nodes_on_same_line)
-    
-    return set(boundary_nodes)
 
 def find_other_two_corner_nodes(node1, node2):
     (w1, h1), (w2, h2) = node1, node2
@@ -201,72 +127,6 @@ def is_node_touching_boundary(node, boundary_nodes):
             return True
     
     return False
-
-def is_node_within_pologon_ray_tracing(node, boundary_nodes):
-    direction = [-1, 0]  # left
-    border_nodes_touched = set()
-
-    # Try to go horizontally to touch a border node 
-    stack = [node]
-    seen = set([node])
-
-    while stack:
-        curr_node = stack.pop()
-
-        if curr_node in boundary_nodes:
-            border_nodes_touched.add(curr_node)  
-
-        # Calculate neighbor node
-        n_w, n_h = curr_node[0] + direction[0], curr_node[1] + direction[1]
-        neighbor = n_w, n_h      
-
-        if is_valid(n_w, n_h, max_width, max_height) and neighbor not in seen:
-            stack.append(neighbor)
-            seen.add(neighbor)
-    
-    return border_nodes_touched
-
-def get_two_horizontal_border_nodes(node, boundary_nodes):
-    """Get two border nodes left and right.
-    
-    Args:
-        node (tuple): A node like (width, height)
-        boundary_nodes: All boundary nodes of red and green color.
-
-    Returns:
-        Nodes touching the boundary nodes. Please be noted that
-        these are not the boundary nodes themselves. They just touch these
-        boundary nodes.
-    """
-    horizontal_directions = [[-1, 0], [1, 0]]  # left, right
-    border_nodes_touched = set()
-
-    # Try to go horizontally to touch a border node 
-    stack = [node]
-    seen = set([node])
-
-    while stack:
-        curr_node = stack.pop()
-
-        for d in horizontal_directions:
-            n_w, n_h = curr_node[0] + d[0], curr_node[1] + d[1]
-            neighbor = n_w, n_h
-
-            # Case 1: horizontal neighbor node is not within a closed boundary
-            # Neighbor node is outside of the matrix
-            if not is_valid(n_w, n_h, max_width, max_height):
-                return border_nodes_touched
-            
-            # Case 2: Found a border node horizontally
-            elif neighbor in boundary_nodes:
-                border_nodes_touched.add(curr_node)  # ****Note: this is the border node, not boundary node
-
-            # Case 3: Not touching boundary node, continue to explore
-            elif neighbor not in seen:
-                stack.append(neighbor)
-                seen.add(neighbor)
-    
-    return border_nodes_touched
 
 def get_neighbor_nodes_heap(node, boundary_nodes, max_width, max_height):
     directions = [[-1, 0], [0, 1], [1, 0], [0, -1]] # left, down, right, up
@@ -344,49 +204,6 @@ def is_node_within_boundary(node, boundary_nodes, max_width, max_height):
         
     return False # This is a bit redundant
 
-def is_area_with_red_green_nodes_only(node1, 
-                                      node2, 
-                                      max_width, 
-                                      max_height, 
-                                      global_registry,
-                                      invalid_registry,
-                                      boundary_nodes):
-    """Traverse an area marked by two opposite nodes.
-    
-    Args:
-        node1 (tuple): A node like (width, height) of one corner of the area.
-        node2 (tuple): A node like (width, height) of the opposite corner of the area.
-        max_width (int): Max value allowed for width.
-        max_height (int): Max value allowed for height.
-        global_registry (set): A set of red or green nodes.
-        invalid_registry (set): A set of nodes not red/green.
-        boundary_nodes (set): A set of red or green nodes on the boundaries. 
-
-    Returns:
-        True if the area is filled with red and green tiles only.
-        False, otherwise.
-    """
-    directions = [[-1, 0], [0, 1], [1, 0], [0, -1]] # N, E, S, W
-    stack = [node1]  # Stack for DFS, push one input node into the stack
-    seen = {node1}
-    area = (node1, node2)
-    
-    while stack:
-        width, height = stack.pop()
-        curr_node = width, height
-        if not is_green_red(curr_node, global_registry, invalid_registry, boundary_nodes, max_width, max_height):
-            return False
-        
-        for d in directions:
-            n_width, n_height = width + d[0], height + d[1]
-            neighbor = (n_width, n_height)
-            if (is_valid(n_width, n_height, max_width, max_height)
-                and is_in_area(area, neighbor)):
-                if neighbor not in seen:
-                    stack.append(neighbor)
-                    seen.add(neighbor)
-    
-    return True
 
 def gen_area_max_heap(nodes):
     """Generate max heap based on area size."""
@@ -420,36 +237,23 @@ def is_node_in_a_box(node, box):
     return False
     
 
-def find_largest_area_with_condition0(area_max_heap, max_width, max_height, global_registry, invalid_registry, boundary_nodes, prepared_polygon, polygon):
+def find_largest_area(area_max_heap, polygon):
     """Find the largest area containing only red or green nodes.
     
     Args:
         area_max_heap (list): A max heap based on area sizes. A element on heap is like (area, (node1, node2)).
-        max_width (int): Max width of the matrix.
-        max_height (int): Max height of the matrix.
-        global_registry (set): A set of red/green nodes.
-        invalid_registry (set): A set of nodes not red/green.
-        boundary_nodes (set): A set of red/green nodes on the bounaries.
-        prepared_polygon (PreparedPolygon): A prepared polygon of red nodes.
         polygon (Polygon): A polygon of red nodes.
     """
     max_area = 0
     max_area_nodes = []
-    count = 0
-    invalid_nodes = set()
     while area_max_heap:
             area_size, (node1, node2) = heapq.heappop(area_max_heap)
-            
-            # Found the max area, no need to get next element from the max heap
-            if max_area >= -area_size:
-                break
-            
             min_w, min_h, max_w, max_h = nodes_min_max((node1, node2))
             rectangle = box(min_w, min_h, max_w, max_h)
             if rectangle.within(polygon):
-                print(f'valid area - node1={node1}, node2={node2}')
-                max_area = max(max_area, cal_area(node1, node2))
+                max_area = max(max_area, -area_size)
                 max_area_nodes.extend([node1, node2])
+                break
     
     return max_area, max_area_nodes
 
@@ -479,67 +283,6 @@ def aabb_detection(box1, box2):
         box1_max_h >= box2_min_h):
         return True
     return False
-
-def construct_collision_check_seq(nodes):
-    """Construct the list of boxes to check for collisions.
-    
-    Args:
-        nodes: A list of input nodes each of which is like (width, height)
-
-    Returns: 
-        A list of boxes to check if the box is a valid box, i.e., box with only red/green nodes in it.
-        Each box is represented by a pair of opposite nodes, like [(1, 10), (7, 5)].
-    """
-    # Create a list of boxes
-    box_list = []
-    for i in range(len(nodes)):
-        for j in range(i + 1, len(nodes)):
-            node1 = nodes[i]
-            node2 = nodes[j]
-            box = (node1, node2)
-            box_list.append(box)
-
-    # Create box pairs
-    box_pairs = []
-    counter = 0
-    for i in range(len(box_list)):
-        for j in range(i + 1, len(box_list)):
-            box1 = box_list[i]
-            box2 = box_list[j]
-            box_pair = (box1, box2)
-            box_pairs.append(box_pair)
-            counter += 1
-            print(f'count={counter}')
-
-    box_map = collections.defaultdict(list)  # Key: box, Value: a list of boxes colliding with it
-    for box in box_list:
-        box_map[box].append(box)
-
-    # Pair-wise collision check and update box_map for collision info
-    for box_pair in box_pairs:
-        box1, box2 = box_pair
-        collision = aabb_detection(box1, box2)
-        if collision:
-            box_map[box1].append(box2)
-            box_map[box2].append(box1)
-    
-    # Use max heap to find out which box to be checked first 
-    # on whether the box is a valid box (containing only red/gree nodes).
-    max_heap = []
-    for box_list in box_map.values():
-        heapq.heappush(max_heap, (-len(box_list), box_list))
-    
-    box_seq = []
-    seen = set()
-
-    while max_heap:
-        _, box_list = heapq.heappop(max_heap)
-        for box in box_list:
-            if box not in seen:
-                box_seq.append(box)
-                seen.add(box)
-    
-    return box_seq
 
 def gen_matrix(width, height, num_red_tiles):
     """Generate a matrix based on the number of rows and cols and num of red tiles.
@@ -617,23 +360,19 @@ def set_boundary_nodes_to_x(matrix, boundary_nodes, red_tile_nodes):
          if (w, h) not in red_tile_nodes:
              matrix[row][col] = 'X'
 
-# red_tile_nodes, matrix = gen_matrix(10, 10, 20)
-# red_tile_nodes = list(red_tile_nodes)
-# print(red_tile_nodes)
+def solution():
+    lines = get_lines('day9.txt')
+    red_tile_nodes = get_nodes(lines)
+    max_width, max_height = get_matrix_width_height(red_tile_nodes)
+    polygon = Polygon(red_tile_nodes)
+    prepared_polygon = prep(polygon)
 
-lines = get_lines('day9.txt')
-red_tile_nodes = get_nodes(lines)
-max_width, max_height = get_matrix_width_height(red_tile_nodes)
-boundary_nodes = find_boundary_tiles(red_tile_nodes)
-polygon = Polygon(red_tile_nodes)
-prepared_polygon = prep(polygon)
+    area_max_heap = gen_area_max_heap(red_tile_nodes)
+    max_area, max_area_nodes = find_largest_area(area_max_heap, polygon)
+    print(f'The largest area is {max_area}, nodes: {max_area_nodes}')
 
-global_registry = set(boundary_nodes)
-invalid_registry = set()
-
-area_max_heap = gen_area_max_heap(red_tile_nodes)
-max_area, max_area_nodes = find_largest_area_with_condition0(area_max_heap, max_width, max_height, global_registry, invalid_registry, boundary_nodes, prepared_polygon, polygon)
-print(f'The largest area is {max_area}, nodes: {max_area_nodes}')
+if __name__ == '__main__':
+    solution()
 
     
 
