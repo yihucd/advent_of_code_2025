@@ -3,7 +3,7 @@ import heapq
 import math
 import os
 import random
-from shapely.geometry import Polygon, Point
+from shapely.geometry import Polygon, Point, box
 from shapely.prepared import prep
 
 
@@ -180,33 +180,6 @@ def find_other_two_corner_nodes(node1, node2):
     node4 = (w2, h1)
 
     return node3, node4
-
-def is_node_within_boundary0(node, boundary_nodes, max_width, max_height):
-    if node in boundary_nodes:
-        return True
-    
-    horizontal_directions = [[0, -1], [0, 1]]  # W, E
-    vertical_directions = [[-1, 0], [1, 0]]  # N, S
-    
-    for directions in [horizontal_directions, vertical_directions]:
-        stack = [node]
-        seen = set([node])
-
-        while stack:
-            curr_node = stack.pop()
-
-            for d in directions:
-                n_w, n_h = curr_node[0] + d[0], curr_node[1] + d[1]
-                neighbor = n_w, n_h
-                if not is_valid(n_w, n_h, max_width, max_height):
-                    return False
-                elif neighbor in boundary_nodes:
-                    continue
-                elif neighbor not in seen:
-                    stack.append(neighbor)
-                    seen.add(neighbor)
-
-    return True
 
 def is_node_touching_boundary(node, boundary_nodes):
     ##TODO change the comment for direction
@@ -427,6 +400,14 @@ def gen_area_max_heap(nodes):
     
     return max_heap
 
+def nodes_min_max(nodes):
+    (w1, h1), (w2, h2) = nodes
+
+    min_w, max_w = min(w1, w2), max(w1, w2)
+    min_h, max_h = min(h1, h2), max(h1, h2)
+
+    return min_w, min_h, max_w, max_h
+
 def is_node_in_a_box(node, box):
     (w1, h1), (w2, h2) = box
 
@@ -439,7 +420,7 @@ def is_node_in_a_box(node, box):
     return False
     
 
-def find_largest_area_with_condition0(area_max_heap, max_width, max_height, global_registry, invalid_registry, boundary_nodes):
+def find_largest_area_with_condition0(area_max_heap, max_width, max_height, global_registry, invalid_registry, boundary_nodes, prepared_polygon, polygon):
     """Find the largest area containing only red or green nodes.
     
     Args:
@@ -449,98 +430,29 @@ def find_largest_area_with_condition0(area_max_heap, max_width, max_height, glob
         global_registry (set): A set of red/green nodes.
         invalid_registry (set): A set of nodes not red/green.
         boundary_nodes (set): A set of red/green nodes on the bounaries.
+        prepared_polygon (PreparedPolygon): A prepared polygon of red nodes.
+        polygon (Polygon): A polygon of red nodes.
     """
     max_area = 0
+    max_area_nodes = []
     count = 0
     invalid_nodes = set()
     while area_max_heap:
             area_size, (node1, node2) = heapq.heappop(area_max_heap)
-            box = (node1, node2)
-            
-            count += 1
-            print(f'count={count}')
-            print(f'node1={node1}, node2={node2}')
-            print(f'max_size_so_far={max_area}, heap top area size {-area_size}')
-
-            # Check if any invalid node is in the box
-            early_stop = False
-            for invalid_node in invalid_nodes:
-                if is_node_in_a_box(invalid_node, box):
-                    print(f'catch invalid node in a box')
-                    early_stop = True
-                    break
-            
-            if early_stop:
-                continue
             
             # Found the max area, no need to get next element from the max heap
             if max_area >= -area_size:
                 break
             
-            valid_area = True
-            other_two_nodes = find_other_two_corner_nodes(node1, node2)
-            for node in other_two_nodes:
-                if not is_node_within_boundary(node, boundary_nodes, max_width, max_height):
-                    valid_area = False
-                    invalid_nodes.add(node)
-                    print('not valid area')
-                    print(f'heap size = {len(area_max_heap)}')
-                    # break
-
-            if valid_area:
+            min_w, min_h, max_w, max_h = nodes_min_max((node1, node2))
+            rectangle = box(min_w, min_h, max_w, max_h)
+            if rectangle.within(polygon):
                 print(f'valid area - node1={node1}, node2={node2}')
                 max_area = max(max_area, cal_area(node1, node2))
+                max_area_nodes.extend([node1, node2])
     
-    return max_area
+    return max_area, max_area_nodes
 
-
-def find_largest_area_with_condition(box_checking_seq, max_width, max_height, global_registry, invalid_registry, boundary_nodes):
-    """Find the largest area containing only red or green nodes.
-    
-    Args:
-        box_checking_seq (list): A list of boxes to be checked and see if all 4 corner nodes are in a closed region.
-        max_width (int): Max width of the matrix.
-        max_height (int): Max height of the matrix.
-        global_registry (set): A set of red/green nodes.
-        invalid_registry (set): A set of nodes not red/green.
-        boundary_nodes (set): A set of red/green nodes on the bounaries.
-    """
-    max_area = 0
-    count = 0
-    area_map = {}  # Key: box, Value: 0-invalid 1-valid 2-unknown
-    for box in box_checking_seq:
-        area_map[box] = 2
-
-    for box in box_checking_seq:
-            if area_map[box] != 2:
-                if area_map[box] == 1:
-                    max_area = max(max_area, cal_area(node1, node2))
-                continue
-
-            node1, node2 = box
-            count += 1
-            print(f'count={count}')
-            print(f'node1={node1}, node2={node2}')
-            
-            valid_area = True
-            other_two_nodes = find_other_two_corner_nodes(node1, node2)
-            # Case 1: Found invalid area
-            for node in other_two_nodes:
-                if not is_node_within_boundary(node, boundary_nodes, max_width, max_height):
-                    valid_area = False
-                    area_map[box] = 0
-                    for box in area_map:
-                        if is_node_in_a_box(node, box):
-                            area_map[box] = 0  # Found an invalid box
-                    print('not valid area')
-
-            # Case 2: Found valid area
-            if valid_area:
-                print(f'valid area - node1={node1}, node2={node2}')
-                area_map[box] = 1
-                max_area = max(max_area, cal_area(node1, node2))
-    
-    return max_area
 
 def aabb_detection(box1, box2):
     """Detect if box 1 and box 2 collide with each other.
@@ -715,25 +627,16 @@ max_width, max_height = get_matrix_width_height(red_tile_nodes)
 boundary_nodes = find_boundary_tiles(red_tile_nodes)
 polygon = Polygon(red_tile_nodes)
 prepared_polygon = prep(polygon)
-test_point = Point(8, 2) 
-in_polygon = prepared_polygon.contains(test_point)
-print(f'in_polygon={in_polygon}')
-exit()
-# set_boundary_nodes_to_x(matrix, boundary_nodes, red_tile_nodes)
-# print_matrix(matrix)
-# test_node = 5, 4
-# flag = is_node_within_boundary(test_node, boundary_nodes, max_width, max_height)
-# print(f'flag={flag}')
 
 global_registry = set(boundary_nodes)
 invalid_registry = set()
 
-# Use this seq to check if the box is valid, i.e, containing only red and green cells
-#box_checking_seq = construct_collision_check_seq(nodes)
-
 area_max_heap = gen_area_max_heap(red_tile_nodes)
-largest_area = find_largest_area_with_condition0(area_max_heap, max_width, max_height, global_registry, invalid_registry, boundary_nodes, prepared_polygon)
-print(f'The largest area is {largest_area}')
+max_area, max_area_nodes = find_largest_area_with_condition0(area_max_heap, max_width, max_height, global_registry, invalid_registry, boundary_nodes, prepared_polygon, polygon)
+print(f'The largest area is {max_area}, nodes: {max_area_nodes}')
+
+    
+
 
 
 
