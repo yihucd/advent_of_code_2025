@@ -204,12 +204,6 @@ def main():
         system_constraints_str, vars_init_list, vars_str, objective_function_str = generate_a_system_of_constraints(machine_configs)
         print(system_constraints_str)
         total_num_presses += solve_the_system(system_constraints_str, vars_init_list, vars_str, objective_function_str)
-
-        # Find the shortest presss list from backtracking result
-        # curr = tuple(0 for i in range(len(diagram)))
-        # prev_buttons = ()
-        # total_num_presses += find_shortest_seq_presses(machine_configs, curr, prev_buttons)
-        # print(f'line #={i}')
     
     print(f'total number of presses = {total_num_presses}')
 
