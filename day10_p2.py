@@ -1,8 +1,6 @@
-from functools import cache
 import os
 import re
 from z3 import *
-
 
 demo_mode = int(os.getenv('demo'))
 
@@ -20,20 +18,6 @@ def get_lines(filename):
     except Exception as e:
         print(f'File read operation exception happened. See details: {e}')
         return []
-    
-def get_content(filename):
-    demo_filename = 'demo.txt'
-
-    try:
-        if not demo_mode:
-            with open(filename, 'r') as file:
-                content = file.read()
-        else:
-            with open(demo_filename, 'r') as file:
-                content = file.read()        
-        return content
-    except Exception as e:
-        print(f'file reading error. See details {e}')
 
 def get_machine_configs(line):
     """Get diagram, buttons, joltages configs from each machine."""
@@ -56,7 +40,6 @@ def get_machine_configs(line):
 def generate_a_system_of_constraints(machine_configs):
     """Generate a system of constraints based on the config line."""
     #[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
-
     diagram, buttons, joltages = machine_configs
     matrix = []
     for i in range(len(buttons)):
@@ -107,7 +90,7 @@ def solve_the_system(constraints_str, vars_init_list, vars_str, objective_functi
     opt = Optimize()
 
     for var_init in vars_init_list:
-        exec(f'temp_expr = {var_init}', globals(), locals())
+        exec(var_init, globals(), locals())
 
     for constraint_str in constraints_str.split(', '):
         # Use exec() to evaluate the string as Z3 Python code.
@@ -123,11 +106,11 @@ def solve_the_system(constraints_str, vars_init_list, vars_str, objective_functi
 
     # Prepare objective functions statement
     objective_function_statement = 'objective_function = ' + objective_function_str
-    exec(f'temp_expr = {objective_function_statement}', globals(), locals())
+    exec(objective_function_statement, globals(), locals())
 
     # Use the .minimize() method on the Optimize object
     opt_statement = 'opt.minimize(objective_function)'
-    exec(f'temp_expr = {opt_statement}', globals(), locals())
+    exec(opt_statement, globals(), locals())
 
     # 4. Solve the system
     print("\n--- Solving ---")
@@ -146,7 +129,7 @@ def solve_the_system(constraints_str, vars_init_list, vars_str, objective_functi
         m = opt.model()
         print("Solution Found:")
         for statement in statements:
-            exec(f'temp_expr = {statement}', globals(), locals())
+            exec(statement, globals(), locals())
         
         result = locals()['total_presses']
         print('----------------')
@@ -156,53 +139,18 @@ def solve_the_system(constraints_str, vars_init_list, vars_str, objective_functi
         print("No solution found.")
         return 0
 
-
-@cache
-def find_shortest_seq_presses(machine_configs, curr, prev_buttons):
-    """Find the shortest number of presses to get the desired light diagram.
-    
-    Args:
-        machine_configs (tuple): A tuple representing (diagram, buttons, joltages).
-        curr (tuple): Curent light config.
-        prev_buttons (frozenset): Previous buttons pressed.
-
-    Returns:
-        Smallest number of presses to get the desired diagram.
-    """
-    diagram, buttons, joltages = machine_configs
-
-    # If the current joltages config is desirable, no need to press any button
-    if curr == joltages:
-        return 0
-    
-    # If any number in the joltage config is larger than the desired config, then stop
-    for curr_joltage, joltage in zip(curr, joltages):
-        if curr_joltage > joltage:
-            return float('inf')
-        
-    options = []
-    for button in buttons:
-        new_config = list(curr)
-        for toggle in button:
-            new_config[toggle] += 1
-            
-        new_button_set = set(prev_buttons)
-        new_button_set.add(button)
-        press_number = find_shortest_seq_presses(machine_configs, tuple(new_config), frozenset(new_button_set)) + 1
-        options.append(press_number)
-
-    return min(options)
-
 def main():
     lines = get_lines('day10.txt')
     total_num_presses = 0
-    all_machine_configs = []
     for i, line in enumerate(lines):
         # Get each machine's configs
         machine_configs = get_machine_configs(line)
 
+        # Create a system of equations/constraints
         system_constraints_str, vars_init_list, vars_str, objective_function_str = generate_a_system_of_constraints(machine_configs)
         print(system_constraints_str)
+        
+        # Solve the constraints using Z3
         total_num_presses += solve_the_system(system_constraints_str, vars_init_list, vars_str, objective_function_str)
     
     print(f'total number of presses = {total_num_presses}')
