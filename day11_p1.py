@@ -1,6 +1,7 @@
+import collections
 from functools import cache
+from frozendict import frozendict
 import os
-import re
 
 demo_mode = int(os.getenv('demo'))
 
@@ -19,97 +20,67 @@ def get_lines(filename):
         print(f'File read operation exception happened. See details: {e}')
         return []
     
-def get_content(filename):
-    demo_filename = 'demo.txt'
+def get_device_connections(lines):
+    """Create adjcency list from the input lines."""
+    adj_list = collections.defaultdict(list)
 
-    try:
-        if not demo_mode:
-            with open(filename, 'r') as file:
-                content = file.read()
-        else:
-            with open(demo_filename, 'r') as file:
-                content = file.read()        
-        return content
-    except Exception as e:
-        print(f'file reading error. See details {e}')
+    for line in lines:
+        node_str, adj_nodes_str = line.split(':')
+        node = node_str.strip()
+        adj_nodes = adj_nodes_str.split()
+    
+        adj_node_tuple = tuple(adj_nodes)
+        adj_list[node] = adj_node_tuple
 
-def get_machine_configs(line):
-    """Get diagram, buttons, joltages configs from each machine."""
-    # Example: [...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
-    pattern = r'\[(.+)\] (.+) (\{.+\})'
-    match = re.fullmatch(pattern, line)
-    if not match:
-        raise RuntimeError(f'Line does not match the expected format: {line}')
+    adj_list_frozen = frozendict(adj_list)
 
-    diagram_str = match.group(1)
-    buttons_str = match.group(2)
-    joltages_str = match.group(3)
+    return adj_list_frozen
 
-    diagram = tuple(light for light in diagram_str)
-    buttons = tuple(tuple(int(press) for press in button.strip('()').split(',')) for button in buttons_str.split())
-    joltages = tuple(int(joltage) for joltage in joltages_str.strip('{}').split(','))
+# First approach: Use DFS
+def get_all_paths_dfs(start, end, adj_list):
+    """Use DFS to find all paths."""
+    stack = [(start, start)]  # (curr, parent)
+    path_count = 0
 
-    return diagram, buttons, joltages
+    while stack:
+        curr = stack.pop()
+        node, parent = curr
 
+        # Found the end node
+        if node == end:
+            path_count += 1
+
+        if node in adj_list:        
+            for neighbor in adj_list[node]:
+                stack.append((neighbor, parent))
+    
+    return path_count
+
+# Second approach: top-down dynamic programming
+# Recursion with memoization
 @cache
-def find_shortest_seq_presses(machine_configs, curr, prev_buttons):
-    """Find the shortest number of presses to get the desired light diagram.
+def get_path_count(start, end, adj_list):
+    """Calculate the number of paths from start to end node."""
+    if start == end:
+        return 1
     
-    Args:
-        machine_configs (tuple): A tuple representing (diagram, buttons, joltages).
-        curr (tuple): Curent light config.
-        prev_buttons (frozenset): Previous buttons pressed.
+    total_path_count = 0
+    for neighbor in adj_list[start]:
+        total_path_count += get_path_count(neighbor, end, adj_list)
 
-    Returns:
-        Smallest number of presses to get the desired diagram.
-    """
-    diagram, buttons, joltages = machine_configs
-
-    # If the current light config is desirable, no need to press any button
-    if curr == diagram:
-        return 0
-    
-    if len(prev_buttons) == len(buttons):
-        return float('inf')
-    
-    options = []
-    for button in buttons:
-        if button in prev_buttons:
-            continue
-
-        new_config = list(curr)
-        for toggle in button:
-            if new_config[toggle] == '.':
-                new_config[toggle] = '#'
-            else:
-                new_config[toggle] = '.'
-            
-        new_button_set = set(prev_buttons)
-        new_button_set.add(button)
-        press_number = find_shortest_seq_presses(machine_configs, tuple(new_config), frozenset(new_button_set)) + 1
-        options.append(press_number)
-
-    return min(options)
+    return total_path_count
 
 def main():
-    lines = get_lines('day10.txt')
-    total_num_presses = 0
-    
-    for i, line in enumerate(lines):
-        # Get each machine's configs
-        machine_configs = get_machine_configs(line)
-        diagram, buttons, joltages = machine_configs
+    lines = get_lines('day11.txt')
+    adj_list = get_device_connections(lines)
 
-        # Find the shortest presss list from backtracking result
-        curr = tuple('.' for i in range(len(diagram)))
-        prev_buttons = ()
-        total_num_presses += find_shortest_seq_presses(machine_configs, curr, prev_buttons)
-        print(f'line #={i}')
+    # Approach 1: dynamic programming
+    path_count = get_path_count('you', 'out', adj_list)
+
+    # Approach 2: DFS
+    path_count = get_all_paths_dfs('you', 'out', adj_list)
     
-    print(f'total number of presses = {total_num_presses}')
+    print(f'path count from "you" to "out" is: {path_count}')
 
 if __name__ == '__main__':
     main()
-
-        
-
